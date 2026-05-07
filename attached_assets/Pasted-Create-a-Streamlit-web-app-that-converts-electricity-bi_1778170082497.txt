@@ -1,0 +1,128 @@
+Create a Streamlit web app that converts electricity bills to Energybase's EXACT Excel format.
+
+## CRITICAL ROW MAPPING (MUST FOLLOW EXACTLY):
+
+The Excel template has SPECIFIC rows for data. YOU MUST place data in these exact rows:
+
+### Consumer 1 Data (Columns A-E):
+- Row 2: Consumer Name | blank | [Name]
+- Row 3: Consumer No | blank | [Number]
+- Row 4: Fixed Charges | blank | 130
+- Row 5: Sanct. Load (kW) | blank | [Load with "KW"]
+- Row 6: Connection Type | blank | [Type]
+- Row 7: Solar Pannel used | 600 | blank
+- Row 8: "Sr.No" | "Month" | "Units" | "Bill Amount" | "Unit Cost" (HEADERS)
+- **ROWS 9-20: Monthly data (12 months max)**
+  - Column B: Month (e.g., "Jan 2024" or "2024-01-01")
+  - Column C: Units
+  - Column D: Bill Amount
+  - Column E: Leave empty (Unit Cost - formula calculates)
+- Row 21: "Average" | blank | =AVERAGE(C9:C20) | =AVERAGE(D9:D20) | =AVERAGE(E9:E20)
+- Row 22: "kW" | blank | =(C21*12*1.1)/1400 | blank | blank
+- Row 23: "Solar Panels" | blank | =C22/$C$7*1000 | blank | blank
+- Row 24: "Solar Capacity (kW)" | blank | =ROUND(C23,0)*$C$7/1000 | blank | blank
+- Row 25: "Number of Panels" | blank | =C24/$C$7*1000 | blank | blank
+
+### Consumer 2 Data (Columns G-J):
+- Row 2: (Column G blank) | (H blank) | (I blank) | (J blank) | (K blank) | (L blank) | [Name] in column G
+- Row 3: [Number] in column G
+- Row 4: 130 in column G
+- Row 5: [Load with "KW"] in column G
+- Row 6: [Type] in column G
+- Row 8: "Sr.No" | "Month" | "Units" | "Bill Amount" | "Unit Cost" (starting column H)
+- **ROWS 9-20: Monthly data**
+  - Column H: Month
+  - Column I: Units
+  - Column J: Bill Amount
+- Row 21: "Average" | =AVERAGE(H9:H20) | =AVERAGE(I9:I20) | =AVERAGE(J9:J20)
+- Row 22: "kW" | =(H21*12*1.1)/1400 | blank | blank
+- Row 23: "Solar Panels" | =H22/$C$7*1000 | blank | blank
+- Row 24: "Solar Capacity (kW)" | =ROUND(H23,0)*$C$7/1000 | blank | blank
+- Row 25: "Number of Panels" | =H24/$C$7*1000 | blank | blank
+
+### Totals (Bottom):
+- Row 27: "Total Solar Capacity" | =SUM(C24,H24)
+- Row 28: "Number of Solar Panels" | =SUM(C25,H25)
+
+## DATA EXTRACTION REQUIREMENTS:
+
+When user uploads bills (multiple images or one PDF):
+
+1. Extract for EACH month:
+   - Month (e.g., "Jan 2024" or "2024-01-01")
+   - Consumer 1 Units
+   - Consumer 1 Bill Amount
+   - Consumer 2 Units (if exists)
+   - Consumer 2 Bill Amount (if exists)
+
+2. Place data in ROWS 9-20 in CHRONOLOGICAL order (oldest month at row 9, newest at row 20)
+
+3. Example: If user uploads Jan-Jun 2024:
+   - Row 9: Jan 2024 data
+   - Row 10: Feb 2024 data
+   - Row 11: Mar 2024 data
+   - Row 12: Apr 2024 data
+   - Row 13: May 2024 data
+   - Row 14: Jun 2024 data
+   - Rows 15-20: Leave blank
+
+4. If user uploads 12 months, fill rows 9-20 completely
+
+## STATIC DATA (Extract once from first bill):
+- Consumer 1 Name, Number, Load, Connection Type
+- Consumer 2 Name, Number, Load, Connection Type
+- Cell C7 = 600 (Solar panel wattage - NEVER CHANGE)
+
+## WEBSITE UI:
+
+Header: "☀️ Energybase Solar Calculator"
+Subtitle: "Upload electricity bills (PDF or multiple images) → Get complete 12-month solar analysis"
+
+File Upload:
+- Accept multiple files: st.file_uploader(..., accept_multiple_files=True)
+- Show list of uploaded files
+
+Process Button: "🚀 Process Bills"
+
+After Processing:
+- Show table of extracted monthly data
+- Download button for Excel
+
+## GEMINI API PROMPT:
+
+For each bill/image, extract:
+
+{
+    "bill_month": "Jan 2024",
+    "consumer1": {
+        "units": 350,
+        "bill_amount": 1993.23
+    },
+    "consumer2": {
+        "units": null,
+        "bill_amount": null
+    }
+}
+
+Also extract once from first bill:
+{
+    "consumer1_name": "Mr. Rahul Sharad Patil",
+    "consumer1_number": "000012345678",
+    "consumer1_load": 5,
+    "consumer1_connection": "LT I (R)",
+    "consumer2_name": null,
+    "consumer2_number": null,
+    "consumer2_load": null,
+    "consumer2_connection": null
+}
+
+## TECHNICAL REQUIREMENTS:
+
+- Use openpyxl to create Excel
+- Place data in EXACT rows 9-20 (NOT rows 2-6)
+- DO NOT modify row 7 (Solar Panel used = 600)
+- Keep all formulas as shown above
+- Support multiple image uploads
+- Sort data by month chronologically
+
+## Complete app.py with all requirements above.

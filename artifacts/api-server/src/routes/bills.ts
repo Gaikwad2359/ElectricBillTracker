@@ -47,7 +47,7 @@ interface MonthlyEntry {
 
 // ─── AI Prompts ──────────────────────────────────────────────────────────────
 
-const META_PROMPT = `Extract consumer metadata from this Indian electricity bill. Return ONLY valid JSON:
+const META_PROMPT = `Extract consumer metadata from this Indian MSEDCL electricity bill. Return ONLY valid JSON with no markdown:
 
 {
   "consumer1_name": "Shri Madhusham Khobragade",
@@ -56,16 +56,16 @@ const META_PROMPT = `Extract consumer metadata from this Indian electricity bill
   "consumer1_connection": "90/LT I Res 1-Phase",
   "consumer2_name": "Ranjana Khobragade",
   "consumer2_number": "439322232375",
-  "consumer2_load": 1,
+  "consumer2_load": 1.0,
   "consumer2_connection": "90/LT I Res 1-Phase"
 }
 
 Rules:
-- consumer1_load must be a number in kW (e.g. 3.3 not "3.3KW")
-- If only one consumer, set consumer2_* fields to null
-- Return ONLY the JSON object, no markdown`;
+- consumer1_load and consumer2_load must be plain numbers in kW (e.g. 3.3 not "3.3KW")
+- If only one consumer is on the bill, set all consumer2_* fields to null
+- Return ONLY the JSON object, no markdown, no extra text`;
 
-const MONTHLY_PROMPT = `Extract monthly billing data from this Indian electricity bill. Return ONLY valid JSON:
+const MONTHLY_PROMPT = `Extract monthly billing data from this Indian MSEDCL electricity bill. Return ONLY valid JSON with no markdown:
 
 {
   "bill_month": "2026-01-01",
@@ -80,11 +80,11 @@ const MONTHLY_PROMPT = `Extract monthly billing data from this Indian electricit
 }
 
 Rules:
-- bill_month must be "YYYY-MM-01" format for the billing month
-- units must be a number (kWh consumed this billing cycle)
-- bill_amount must be a number (total rupees for this billing cycle)
-- If consumer2 is not present on this bill, set consumer2.units = null and consumer2.bill_amount = null
-- Return ONLY the JSON object, no markdown`;
+- bill_month must be ISO format "YYYY-MM-01" for the billing month shown on the bill
+- units = electricity units (kWh) consumed this billing cycle (a number)
+- bill_amount = total bill amount in rupees for this cycle (a number)
+- If consumer2 does not appear on this bill set consumer2.units = null and consumer2.bill_amount = null
+- Return ONLY the JSON object, no markdown, no extra text`;
 
 // ─── AI Calls ────────────────────────────────────────────────────────────────
 
@@ -104,11 +104,11 @@ async function extractMeta(buffer: Buffer, mimeType: string): Promise<ConsumerMe
   const parsed = JSON.parse(raw) as ConsumerMeta;
   return {
     consumer1_name: parsed.consumer1_name ?? null,
-    consumer1_number: parsed.consumer1_number ?? null,
+    consumer1_number: String(parsed.consumer1_number ?? "").trim() || null,
     consumer1_load: typeof parsed.consumer1_load === "number" ? parsed.consumer1_load : null,
     consumer1_connection: parsed.consumer1_connection ?? null,
     consumer2_name: parsed.consumer2_name ?? null,
-    consumer2_number: parsed.consumer2_number ?? null,
+    consumer2_number: String(parsed.consumer2_number ?? "").trim() || null,
     consumer2_load: typeof parsed.consumer2_load === "number" ? parsed.consumer2_load : null,
     consumer2_connection: parsed.consumer2_connection ?? null,
   };
@@ -144,75 +144,98 @@ async function extractMonthly(buffer: Buffer, mimeType: string): Promise<Monthly
 
 // ─── Excel Generation ────────────────────────────────────────────────────────
 //
-// Layout (1-indexed rows, letters = columns):
-//   A  B        C      D           E            F   G        H      I           J
-//   -- -------- ------ ----------- ------------ --- -------- ------ ----------- -----------
-//   2  Con Name        [Name1]                          [Name2]
-//   3  Con No          [Num1]                           [Num2]
-//   4  Fixed Ch        130                              130
-//   5  Sanct.          [Load1]                          [Load2]
-//   6  Conn.           [Type1]                          [Type2]
-//   7  Solar W  600
-//   8  Sr.No   Month   Units       Bill Amt     Unit C  Month   Units  Bill Amt  Unit Cost
-//   9-20       [monthly data rows 1-12]
-//   21 Average  [blank] =AVG(C9:C20) =AVG(D9:D20)       [blank] =AVG(H9:H20) =AVG(I9:I20)
-//   22 kW               =(C21*12*1.1)/1400              =(H21*12*1.1)/1400
-//   23 Panels            =C22/$C$7*1000                  =H22/$C$7*1000
-//   24 Capacity          =ROUND(C23,0)*$C$7/1000         =ROUND(H23,0)*$C$7/1000
-//   25 No.Panels         =C24/$C$7*1000                  =H24/$C$7*1000
-//   27 Total cap         =SUM(C24,H24)
-//   28 Total panels      =SUM(C25,H25)
+// EXACT COLUMN LAYOUT (1-indexed rows):
+//
+//   Col:  A              B       C        D            E          F   G              H       I            J
+//         ─────────────  ──────  ───────  ───────────  ─────────  ─── ─────────────  ──────  ───────────  ─────────
+//   R2:   Consumer Name          [C1Name]                             [C2Name]
+//   R3:   Consumer No            [C1Num]                              [C2Num]
+//   R4:   Fixed Charges          130                                  130
+//   R5:   Sanct.Load(kW)         [C1Load]                             [C2Load]
+//   R6:   Connection Type        [C1Conn]                             [C2Conn]
+//   R7:   Solar Panel used  600
+//   R8:   Sr.No          Month   Units    Bill Amount  Unit Cost  F   Sr.No*  Month*  Units    Bill Amount  Unit Cost
+//   R9-20:[1-12]         [Mon]   [C1kWh]  [C1₹]       [formula]      (blank) (=B)    [C2kWh]  [C2₹]        [formula]
+//   R21:  Average        blank   AVG(C)   AVG(D)       AVG(E)        Average  blank   AVG(H)   AVG(I)       AVG(J)
+//   R22:  kW             blank   =(C21…)                             kW       =(H21…)
+//   R23:  Solar Panels   blank   =C22/…                              Solar P  =H22/…
+//   R24:  Solar Cap(kW)  blank   =ROUND…                             Solar C  =ROUND…
+//   R25:  No. of Panels  blank   =C24/…                              No.Pnl   =H24/…
+//   R27:  Total Solar Cap        =SUM(C24,H24)
+//   R28:  No.Solar Panels        =SUM(C25,H25)
+//
+// * Consumer 2 does NOT need a separate Month column — column B month applies to both.
+//   G is the label column for Consumer 2.  H = C2 Units,  I = C2 Bill,  J = C2 Unit Cost.
 
-function generateExcel(
-  meta: ConsumerMeta,
-  monthlyData: MonthlyEntry[],
-): Buffer {
+function generateExcel(meta: ConsumerMeta, monthlyData: MonthlyEntry[]): Buffer {
   const wb = XLSX.utils.book_new();
   const ws: XLSX.WorkSheet = {};
 
-  const s = (cell: string, v: string | number, f?: string) => {
-    if (f) {
-      ws[cell] = { t: typeof v === "number" ? "n" : "s", v, f };
-    } else {
-      ws[cell] = { t: typeof v === "number" ? "n" : "s", v };
-    }
+  // Helper to write a plain cell
+  const s = (cell: string, v: string | number) => {
+    ws[cell] = { t: typeof v === "number" ? "n" : "s", v };
+  };
+  // Helper to write a formula cell
+  const f = (cell: string, formula: string) => {
+    ws[cell] = { t: "n", f: formula };
   };
 
-  // ── Consumer meta (rows 2-6) ───────────────────────────────────────────────
-  s("A2", "Consumer Name");   s("C2", meta.consumer1_name ?? "");   s("G2", meta.consumer2_name ?? "");
-  s("A3", "Consumer No");     s("C3", meta.consumer1_number ?? ""); s("G3", meta.consumer2_number ?? "");
-  s("A4", "Fixed Charges");   s("C4", 130);                         s("G4", 130);
-  s("A5", "Sanct. Load (kW)");s("C5", meta.consumer1_load ?? "");  s("G5", meta.consumer2_load ?? "");
-  s("A6", "Connection Type"); s("C6", meta.consumer1_connection ?? ""); s("G6", meta.consumer2_connection ?? "");
+  // ── Consumer 1 metadata (rows 2-6, labels in A, values in C) ──────────────
+  s("A2", "Consumer Name");    s("C2", meta.consumer1_name ?? "");
+  s("A3", "Consumer No");      s("C3", meta.consumer1_number ?? "");
+  s("A4", "Fixed Charges");    s("C4", 130);
+  s("A5", "Sanct. Load (kW)"); s("C5", meta.consumer1_load != null ? `${meta.consumer1_load}KW` : "");
+  s("A6", "Connection Type");  s("C6", meta.consumer1_connection ?? "");
 
-  // ── Solar panel wattage (row 7) ────────────────────────────────────────────
-  s("A7", "Solar Panel used"); s("B7", 600);
+  // ── Consumer 2 metadata (rows 2-6, values in G — label column for C2) ─────
+  s("G2", meta.consumer2_name ?? "");
+  s("G3", meta.consumer2_number ?? "");
+  s("G4", 130);
+  s("G5", meta.consumer2_load != null ? `${meta.consumer2_load}KW` : "");
+  s("G6", meta.consumer2_connection ?? "");
+
+  // ── Solar panel wattage (row 7) — cell B7 = 600, also set $C$7 = 600 ─────
+  // The formulas reference $C$7 for wattage.
+  s("A7", "Solar Panel used");
+  s("B7", 600);
+  s("C7", 600); // $C$7 used in formulas
 
   // ── Column headers (row 8) ────────────────────────────────────────────────
   s("A8", "Sr.No");
-  s("B8", "Month"); s("C8", "Units"); s("D8", "Bill Amount"); s("E8", "Unit Cost");
-  s("G8", "Month"); s("H8", "Units"); s("I8", "Bill Amount"); s("J8", "Unit Cost");
+  s("B8", "Month");
+  s("C8", "Units");
+  s("D8", "Bill Amount");
+  s("E8", "Unit Cost");
+  // F is blank separator
+  s("G8", "Sr.No");
+  // H8 blank (month = same as B column)
+  s("H8", "Units");
+  s("I8", "Bill Amount");
+  s("J8", "Unit Cost");
 
-  // ── Monthly data rows (9-20, 12 rows) ─────────────────────────────────────
+  // ── Monthly data rows (9-20, 12 rows max) ─────────────────────────────────
   for (let i = 0; i < 12; i++) {
     const row = 9 + i;
-    s(`A${row}`, i + 1); // Sr.No
+    s(`A${row}`, i + 1); // Sr.No for both consumers
+
     if (i < monthlyData.length) {
       const entry = monthlyData[i];
-      // Format month as display string e.g. "Feb 2025"
+
+      // Format month label e.g. "Jan 2025"
       let monthLabel = entry.month;
       try {
-        const d = new Date(entry.month);
+        const d = new Date(entry.month + "T00:00:00");
         if (!isNaN(d.getTime())) {
           monthLabel = d.toLocaleString("en-IN", { month: "short", year: "numeric" });
         }
       } catch { /* keep raw */ }
 
+      // Consumer 1 (B = Month, C = Units, D = Bill Amount)
       s(`B${row}`, monthLabel);
       if (entry.consumer1Units !== null) s(`C${row}`, entry.consumer1Units);
       if (entry.consumer1Bill !== null)  s(`D${row}`, entry.consumer1Bill);
 
-      s(`G${row}`, monthLabel);
+      // Consumer 2 (H = Units, I = Bill Amount) — month shared from col B
       if (entry.consumer2Units !== null) s(`H${row}`, entry.consumer2Units);
       if (entry.consumer2Bill !== null)  s(`I${row}`, entry.consumer2Bill);
     }
@@ -220,50 +243,62 @@ function generateExcel(
 
   // ── Row 21: Averages ───────────────────────────────────────────────────────
   s("A21", "Average");
-  ws["C21"] = { t: "n", f: "AVERAGE(C9:C20)" };
-  ws["D21"] = { t: "n", f: "AVERAGE(D9:D20)" };
-  ws["H21"] = { t: "n", f: "AVERAGE(H9:H20)" };
-  ws["I21"] = { t: "n", f: "AVERAGE(I9:I20)" };
+  f("C21", "AVERAGE(C9:C20)");   // avg units Consumer 1
+  f("D21", "AVERAGE(D9:D20)");   // avg bill Consumer 1
+  f("E21", "AVERAGE(E9:E20)");   // avg unit cost Consumer 1
 
-  // ── Row 22: kW (annual generation estimate) ────────────────────────────────
+  s("G21", "Average");
+  f("H21", "AVERAGE(H9:H20)");   // avg units Consumer 2
+  f("I21", "AVERAGE(I9:I20)");   // avg bill Consumer 2
+  f("J21", "AVERAGE(J9:J20)");   // avg unit cost Consumer 2
+
+  // ── Row 22: System kW ─────────────────────────────────────────────────────
   s("A22", "kW");
-  ws["C22"] = { t: "n", f: "(C21*12*1.1)/1400" };
-  ws["H22"] = { t: "n", f: "(H21*12*1.1)/1400" };
+  f("C22", "(C21*12*1.1)/1400");
 
-  // ── Row 23: Solar Panels ───────────────────────────────────────────────────
+  s("G22", "kW");
+  f("H22", "(H21*12*1.1)/1400");
+
+  // ── Row 23: Solar Panels ──────────────────────────────────────────────────
   s("A23", "Solar Panels");
-  ws["C23"] = { t: "n", f: "C22/$C$7*1000" };
-  ws["H23"] = { t: "n", f: "H22/$C$7*1000" };
+  f("C23", "C22/$C$7*1000");
 
-  // ── Row 24: Solar Capacity ─────────────────────────────────────────────────
+  s("G23", "Solar Panels");
+  f("H23", "H22/$C$7*1000");
+
+  // ── Row 24: Solar Capacity ────────────────────────────────────────────────
   s("A24", "Solar Capacity (kW)");
-  ws["C24"] = { t: "n", f: "ROUND(C23,0)*$C$7/1000" };
-  ws["H24"] = { t: "n", f: "ROUND(H23,0)*$C$7/1000" };
+  f("C24", "ROUND(C23,0)*$C$7/1000");
 
-  // ── Row 25: Number of Panels ───────────────────────────────────────────────
+  s("G24", "Solar Capacity (kW)");
+  f("H24", "ROUND(H23,0)*$C$7/1000");
+
+  // ── Row 25: Number of Panels ──────────────────────────────────────────────
   s("A25", "Number of Panels");
-  ws["C25"] = { t: "n", f: "C24/$C$7*1000" };
-  ws["H25"] = { t: "n", f: "H24/$C$7*1000" };
+  f("C25", "C24/$C$7*1000");
 
-  // ── Row 27-28: Totals ──────────────────────────────────────────────────────
+  s("G25", "Number of Panels");
+  f("H25", "H24/$C$7*1000");
+
+  // ── Rows 27-28: Totals ────────────────────────────────────────────────────
   s("A27", "Total Solar Capacity");
-  ws["C27"] = { t: "n", f: "SUM(C24,H24)" };
+  f("C27", "SUM(C24,H24)");
 
   s("A28", "Number of Solar Panels");
-  ws["C28"] = { t: "n", f: "SUM(C25,H25)" };
+  f("C28", "SUM(C25,H25)");
 
-  // ── Column widths ──────────────────────────────────────────────────────────
+  // ── Column widths ─────────────────────────────────────────────────────────
   ws["!cols"] = [
-    { wch: 22 }, // A
-    { wch: 12 }, // B
-    { wch: 10 }, // C
-    { wch: 14 }, // D
-    { wch: 11 }, // E
-    { wch: 3  }, // F (separator)
-    { wch: 12 }, // G
-    { wch: 10 }, // H
-    { wch: 14 }, // I
-    { wch: 11 }, // J
+    { wch: 22 }, // A — labels
+    { wch: 11 }, // B — month / wattage
+    { wch: 10 }, // C — C1 units
+    { wch: 14 }, // D — C1 bill
+    { wch: 11 }, // E — C1 unit cost
+    { wch: 3  }, // F — separator
+    { wch: 22 }, // G — C2 labels / name
+    { wch: 10 }, // H — C2 units
+    { wch: 14 }, // I — C2 bill
+    { wch: 11 }, // J — C2 unit cost
   ];
 
   ws["!ref"] = "A1:J30";
@@ -322,7 +357,7 @@ router.post(
         return;
       }
 
-      // Step 3: Deduplicate by month and sort oldest → newest
+      // Step 3: Deduplicate by month key and sort oldest → newest
       const byMonth = new Map<string, MonthlyEntry>();
       for (const entry of rawMonthly) {
         if (!byMonth.has(entry.month)) {
@@ -348,7 +383,7 @@ router.post(
       let monthLabel = "Report";
       if (latestMonth) {
         try {
-          const d = new Date(latestMonth);
+          const d = new Date(latestMonth + "T00:00:00");
           if (!isNaN(d.getTime())) {
             monthLabel = d.toLocaleString("en-IN", { month: "long", year: "numeric" });
           }
