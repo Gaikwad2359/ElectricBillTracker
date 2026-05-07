@@ -8,6 +8,6 @@
 
 export * from "./apiError";
 export * from "./billProcessResult";
-export * from "./consumerData";
 export * from "./healthStatus";
-export * from "./processBillBody";
+export * from "./monthlyEntry";
+export * from "./processBillsBody";

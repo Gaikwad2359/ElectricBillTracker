@@ -1,0 +1,103 @@
+Create a Streamlit web app that converts electricity bills to Energybase's EXACT Excel format.
+
+## CRITICAL UNDERSTANDING:
+
+The company's Excel has:
+- TWO consumers side by side (columns A-E for Consumer 1, columns G-J for Consumer 2)
+- TWELVE months of historical data (Feb 2025 to Jan 2026)
+- Formulas that calculate average, solar panels, system size
+- Total solar capacity at bottom = sum of both consumers
+
+Your app MUST generate Excel matching this EXACT structure.
+
+## MULTIPLE BILL UPLOAD OPTION:
+
+User can upload bills in TWO ways:
+
+### Option 1: Upload ONE PDF
+- MSEDCL bills often have 12 months on 1-2 pages
+- AI will extract all 12 months from the PDF
+
+### Option 2: Upload MULTIPLE images
+- User can upload multiple files at once (Ctrl+Click or drag multiple)
+- App processes all images sequentially
+- Extracts data from each bill/photo
+- Combines into ONE Excel with 12 months of data
+
+Implementation: Use st.file_uploader with accept_multiple_files=True
+
+## EXACT EXCEL FORMAT (MUST MATCH):
+
+Columns A-E (Consumer 1):
+- Row 2: "Consumer Name" | blank | [Name 1]
+- Row 3: "Consumer No" | blank | [Number 1]
+- Row 4: "Fixed Charges" | blank | 130
+- Row 5: "Sanct. Load (kW)" | blank | [3.30KW]
+- Row 6: "Connection Type" | blank | [90/LT I Res 1-Phase]
+- Row 7: "Solar Pannel used" | 600 | blank
+- Row 8: "Sr.No" | "Month" | "Units" | "Bill Amount" | "Unit Cost"
+- Row 9-20: Monthly data (Feb 2025 to Jan 2026)
+- Row 21: "Average" | blank | =AVERAGE(D9:D20) | =AVERAGE(E14:E20) | =AVERAGE(F14:F20)
+- Row 22: "kW" | blank | =(D21*12*1.1)/1400 | blank | blank
+- Row 23: "Solar Panels" | blank | =D22/$C$7*1000 | blank | blank
+- Row 24: "Solar capacity" | blank | =ROUND(D23,0)*$C$7/1000 | blank | blank
+- Row 25: "Number of Panels" | blank | =D24/$C$7*1000 | blank | blank
+
+Columns G-J (Consumer 2):
+- Row 2: blank | blank | blank | blank | blank | blank | [Name 2]
+- Row 3: blank | blank | blank | blank | blank | blank | [Number 2]
+- Row 4: blank | blank | blank | blank | blank | 130 | blank
+- Row 5: blank | blank | blank | blank | blank | [1KW] | blank
+- Row 6: blank | blank | blank | blank | blank | [Connection Type] | blank
+- Row 8: blank | "Month" | "Units" | "Bill Amount" | "Unit Cost"
+- Row 9-20: Monthly data for Consumer 2
+- Row 21: "Average" | =AVERAGE(H9:H20) | =AVERAGE(I14:I20) | =AVERAGE(J14:J20)
+- Row 22: "kW" | =(H21*12*1.1)/1400 | blank | blank
+- Row 23: "Solar Panels" | =H22/$C$7*1000 | blank | blank
+- Row 24: "Solar capacity" | =ROUND(H23,0)*$C$7/1000 | blank | blank
+- Row 25: "Number of Panels" | =H24/$C$7*1000 | blank | blank
+
+Bottom totals:
+- Row 27: "Total solar capacity" | =sum(24:24) (across both consumers)
+- Row 28: "Number of solar panels" | =sum(25:25) (across both consumers)
+
+## WHAT AI MUST EXTRACT FROM BILLS:
+
+For each bill/month, extract for both consumers:
+- Month/Date (e.g., 2026-01-01)
+- Units consumed (e.g., 25 for Consumer 1, 137 for Consumer 2)
+- Bill amount (e.g., 320.45 for Consumer 1, 3335.34 for Consumer 2)
+- Consumer names, numbers, sanctioned load, connection type (extract once, reuse)
+
+If processing multiple images, COLLECT data across all images and combine into 12 months.
+
+## WEBSITE UI REQUIREMENTS:
+
+Header:
+- "☀️ Energybase Solar Calculator"
+- "AI-Powered | Instant | Free"
+- "Upload electricity bills (PDF or multiple images) to get solar recommendation"
+
+Upload Area:
+- File uploader with "Upload one PDF OR multiple images"
+- Text: "Supported: PDF, PNG, JPG (Max 10MB each, up to 12 files)"
+- Show list of uploaded files after selection
+
+Process Button:
+- Green: "🚀 Process Bills"
+
+After Processing:
+- Show extracted data table for all 12 months
+- Show both consumers' data
+- Download button: "📥 Download Excel Report"
+
+How It Works:
+- "1. Upload Bills" - Upload one PDF or multiple bill images
+- "2. AI Reads Data" - Extracts 12 months of consumption data
+- "3. Get Excel" - Download complete solar analysis
+
+Colors: Green (#10B981), Amber (#F59E0B), Background (#F9FAFB)
+
+## GEMINI API PROMPT:
+
+Send this to Gemini for EACH bill/image:

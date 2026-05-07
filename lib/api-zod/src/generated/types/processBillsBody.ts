@@ -6,6 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ProcessBillBody = {
-  file: Blob;
+export type ProcessBillsBody = {
+  files: Blob[];
 };

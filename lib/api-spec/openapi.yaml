@@ -18,7 +18,6 @@ paths:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -28,9 +27,9 @@ paths:
                 $ref: "#/components/schemas/HealthStatus"
   /bills/process:
     post:
-      operationId: processBill
+      operationId: processBills
       tags: [bills]
-      summary: Process electricity bill (PDF or image)
+      summary: Process one or more electricity bill files (PDF or images)
       requestBody:
         required: true
         content:
@@ -38,11 +37,13 @@ paths:
             schema:
               type: object
               properties:
-                file:
-                  type: string
-                  format: binary
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
               required:
-                - file
+                - files
       responses:
         "200":
           description: Extracted bill data and Excel report
@@ -77,45 +78,66 @@ components:
           type: string
       required:
         - status
-    ConsumerData:
+    MonthlyEntry:
       type: object
       properties:
-        name:
-          type: ["string", "null"]
-        consumerNumber:
-          type: ["string", "null"]
-        sanctionedLoadKw:
+        month:
+          type: string
+          description: "ISO date string, e.g. 2026-01-01"
+        consumer1Units:
           type: ["number", "null"]
-        connectionType:
-          type: ["string", "null"]
-        currentMonthUnits:
+        consumer1Bill:
           type: ["number", "null"]
-        currentMonthBill:
+        consumer2Units:
           type: ["number", "null"]
-        currentMonthDate:
-          type: ["string", "null"]
+        consumer2Bill:
+          type: ["number", "null"]
       required:
-        - name
-        - consumerNumber
-        - sanctionedLoadKw
-        - connectionType
-        - currentMonthUnits
-        - currentMonthBill
-        - currentMonthDate
+        - month
+        - consumer1Units
+        - consumer1Bill
+        - consumer2Units
+        - consumer2Bill
     BillProcessResult:
       type: object
       properties:
-        consumer1:
-          $ref: "#/components/schemas/ConsumerData"
-        consumer2:
-          $ref: "#/components/schemas/ConsumerData"
+        consumer1Name:
+          type: ["string", "null"]
+        consumer1Number:
+          type: ["string", "null"]
+        consumer1Load:
+          type: ["number", "null"]
+        consumer1Connection:
+          type: ["string", "null"]
+        consumer2Name:
+          type: ["string", "null"]
+        consumer2Number:
+          type: ["string", "null"]
+        consumer2Load:
+          type: ["number", "null"]
+        consumer2Connection:
+          type: ["string", "null"]
+        monthlyData:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonthlyEntry"
+        totalFilesProcessed:
+          type: integer
         excelBase64:
           type: string
         excelFilename:
           type: string
       required:
-        - consumer1
-        - consumer2
+        - consumer1Name
+        - consumer1Number
+        - consumer1Load
+        - consumer1Connection
+        - consumer2Name
+        - consumer2Number
+        - consumer2Load
+        - consumer2Connection
+        - monthlyData
+        - totalFilesProcessed
         - excelBase64
         - excelFilename
     ApiError:

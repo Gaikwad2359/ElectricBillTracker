@@ -20,7 +20,7 @@ import type {
   ApiError,
   BillProcessResult,
   HealthStatus,
-  ProcessBillBody,
+  ProcessBillsBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -33,7 +33,6 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const getHealthCheckUrl = () => {
@@ -109,44 +108,44 @@ export function useHealthCheck<
 }
 
 /**
- * @summary Process electricity bill (PDF or image)
+ * @summary Process one or more electricity bill files (PDF or images)
  */
-export const getProcessBillUrl = () => {
+export const getProcessBillsUrl = () => {
   return `/api/bills/process`;
 };
 
-export const processBill = async (
-  processBillBody: ProcessBillBody,
+export const processBills = async (
+  processBillsBody: ProcessBillsBody,
   options?: RequestInit,
 ): Promise<BillProcessResult> => {
   const formData = new FormData();
-  formData.append(`file`, processBillBody.file);
+  processBillsBody.files.forEach((value) => formData.append(`files`, value));
 
-  return customFetch<BillProcessResult>(getProcessBillUrl(), {
+  return customFetch<BillProcessResult>(getProcessBillsUrl(), {
     ...options,
     method: "POST",
     body: formData,
   });
 };
 
-export const getProcessBillMutationOptions = <
+export const getProcessBillsMutationOptions = <
   TError = ErrorType<ApiError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof processBill>>,
+    Awaited<ReturnType<typeof processBills>>,
     TError,
-    { data: BodyType<ProcessBillBody> },
+    { data: BodyType<ProcessBillsBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof processBill>>,
+  Awaited<ReturnType<typeof processBills>>,
   TError,
-  { data: BodyType<ProcessBillBody> },
+  { data: BodyType<ProcessBillsBody> },
   TContext
 > => {
-  const mutationKey = ["processBill"];
+  const mutationKey = ["processBills"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -156,42 +155,42 @@ export const getProcessBillMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof processBill>>,
-    { data: BodyType<ProcessBillBody> }
+    Awaited<ReturnType<typeof processBills>>,
+    { data: BodyType<ProcessBillsBody> }
   > = (props) => {
     const { data } = props ?? {};
 
-    return processBill(data, requestOptions);
+    return processBills(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type ProcessBillMutationResult = NonNullable<
-  Awaited<ReturnType<typeof processBill>>
+export type ProcessBillsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof processBills>>
 >;
-export type ProcessBillMutationBody = BodyType<ProcessBillBody>;
-export type ProcessBillMutationError = ErrorType<ApiError>;
+export type ProcessBillsMutationBody = BodyType<ProcessBillsBody>;
+export type ProcessBillsMutationError = ErrorType<ApiError>;
 
 /**
- * @summary Process electricity bill (PDF or image)
+ * @summary Process one or more electricity bill files (PDF or images)
  */
-export const useProcessBill = <
+export const useProcessBills = <
   TError = ErrorType<ApiError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof processBill>>,
+    Awaited<ReturnType<typeof processBills>>,
     TError,
-    { data: BodyType<ProcessBillBody> },
+    { data: BodyType<ProcessBillsBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof processBill>>,
+  Awaited<ReturnType<typeof processBills>>,
   TError,
-  { data: BodyType<ProcessBillBody> },
+  { data: BodyType<ProcessBillsBody> },
   TContext
 > => {
-  return useMutation(getProcessBillMutationOptions(options));
+  return useMutation(getProcessBillsMutationOptions(options));
 };

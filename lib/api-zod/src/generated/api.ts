@@ -8,7 +8,6 @@
 import * as zod from "zod";
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -16,31 +15,31 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * @summary Process electricity bill (PDF or image)
+ * @summary Process one or more electricity bill files (PDF or images)
  */
-export const ProcessBillBody = zod.object({
-  file: zod.instanceof(File),
+export const ProcessBillsBody = zod.object({
+  files: zod.array(zod.instanceof(File)),
 });
 
-export const ProcessBillResponse = zod.object({
-  consumer1: zod.object({
-    name: zod.string().nullable(),
-    consumerNumber: zod.string().nullable(),
-    sanctionedLoadKw: zod.number().nullable(),
-    connectionType: zod.string().nullable(),
-    currentMonthUnits: zod.number().nullable(),
-    currentMonthBill: zod.number().nullable(),
-    currentMonthDate: zod.string().nullable(),
-  }),
-  consumer2: zod.object({
-    name: zod.string().nullable(),
-    consumerNumber: zod.string().nullable(),
-    sanctionedLoadKw: zod.number().nullable(),
-    connectionType: zod.string().nullable(),
-    currentMonthUnits: zod.number().nullable(),
-    currentMonthBill: zod.number().nullable(),
-    currentMonthDate: zod.string().nullable(),
-  }),
+export const ProcessBillsResponse = zod.object({
+  consumer1Name: zod.string().nullable(),
+  consumer1Number: zod.string().nullable(),
+  consumer1Load: zod.number().nullable(),
+  consumer1Connection: zod.string().nullable(),
+  consumer2Name: zod.string().nullable(),
+  consumer2Number: zod.string().nullable(),
+  consumer2Load: zod.number().nullable(),
+  consumer2Connection: zod.string().nullable(),
+  monthlyData: zod.array(
+    zod.object({
+      month: zod.string().describe("ISO date string, e.g. 2026-01-01"),
+      consumer1Units: zod.number().nullable(),
+      consumer1Bill: zod.number().nullable(),
+      consumer2Units: zod.number().nullable(),
+      consumer2Bill: zod.number().nullable(),
+    }),
+  ),
+  totalFilesProcessed: zod.number(),
   excelBase64: zod.string(),
   excelFilename: zod.string(),
 });

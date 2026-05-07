@@ -5,11 +5,27 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { ConsumerData } from "./consumerData";
+import type { MonthlyEntry } from "./monthlyEntry";
 
 export interface BillProcessResult {
-  consumer1: ConsumerData;
-  consumer2: ConsumerData;
+  /** @nullable */
+  consumer1Name: string | null;
+  /** @nullable */
+  consumer1Number: string | null;
+  /** @nullable */
+  consumer1Load: number | null;
+  /** @nullable */
+  consumer1Connection: string | null;
+  /** @nullable */
+  consumer2Name: string | null;
+  /** @nullable */
+  consumer2Number: string | null;
+  /** @nullable */
+  consumer2Load: number | null;
+  /** @nullable */
+  consumer2Connection: string | null;
+  monthlyData: MonthlyEntry[];
+  totalFilesProcessed: number;
   excelBase64: string;
   excelFilename: string;
 }

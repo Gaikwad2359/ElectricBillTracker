@@ -18,306 +18,360 @@ const upload = multer({
   },
 });
 
-interface ConsumerRaw {
-  name: string | null;
-  consumer_number: string | null;
-  sanctioned_load_kw: number | null;
-  connection_type: string | null;
-  current_month_units: number | null;
-  current_month_bill: number | null;
-  current_month_date: string | null;
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface ConsumerMeta {
+  consumer1_name: string | null;
+  consumer1_number: string | null;
+  consumer1_load: number | null;
+  consumer1_connection: string | null;
+  consumer2_name: string | null;
+  consumer2_number: string | null;
+  consumer2_load: number | null;
+  consumer2_connection: string | null;
 }
 
-interface BillExtractionRaw {
-  consumer1: ConsumerRaw;
-  consumer2: ConsumerRaw;
+interface MonthlyRaw {
+  bill_month: string | null;
+  consumer1: { units: number | null; bill_amount: number | null };
+  consumer2: { units: number | null; bill_amount: number | null };
 }
 
-const EXTRACTION_PROMPT = `Extract from this Indian electricity bill. Return ONLY valid JSON:
+interface MonthlyEntry {
+  month: string;
+  consumer1Units: number | null;
+  consumer1Bill: number | null;
+  consumer2Units: number | null;
+  consumer2Bill: number | null;
+}
+
+// ─── AI Prompts ──────────────────────────────────────────────────────────────
+
+const META_PROMPT = `Extract consumer metadata from this Indian electricity bill. Return ONLY valid JSON:
 
 {
+  "consumer1_name": "Shri Madhusham Khobragade",
+  "consumer1_number": "439320095567",
+  "consumer1_load": 3.3,
+  "consumer1_connection": "90/LT I Res 1-Phase",
+  "consumer2_name": "Ranjana Khobragade",
+  "consumer2_number": "439322232375",
+  "consumer2_load": 1,
+  "consumer2_connection": "90/LT I Res 1-Phase"
+}
+
+Rules:
+- consumer1_load must be a number in kW (e.g. 3.3 not "3.3KW")
+- If only one consumer, set consumer2_* fields to null
+- Return ONLY the JSON object, no markdown`;
+
+const MONTHLY_PROMPT = `Extract monthly billing data from this Indian electricity bill. Return ONLY valid JSON:
+
+{
+  "bill_month": "2026-01-01",
   "consumer1": {
-    "name": "consumer name",
-    "consumer_number": "number",
-    "sanctioned_load_kw": 3.3,
-    "connection_type": "residential",
-    "current_month_units": 25,
-    "current_month_bill": 320.45,
-    "current_month_date": "2026-01-01"
+    "units": 25,
+    "bill_amount": 320.45
   },
   "consumer2": {
-    "name": "second consumer name or null",
-    "consumer_number": "number or null",
-    "sanctioned_load_kw": null,
-    "connection_type": null,
-    "current_month_units": null,
-    "current_month_bill": null,
-    "current_month_date": null
+    "units": 137,
+    "bill_amount": 3335.34
   }
 }
 
 Rules:
-- Extract Consumer 1 data always (primary consumer on the bill)
-- Only fill Consumer 2 if there is a clearly separate second consumer on the same bill; otherwise set all Consumer 2 fields to null
-- sanctioned_load_kw must be a number in kW (e.g. 3.3 not "3.3 KW")
-- current_month_units must be a number (kWh consumed this billing cycle)
-- current_month_bill must be a number (total bill amount in rupees)
-- current_month_date must be "YYYY-MM-01" format for the billing month
-- connection_type must be one of: "residential", "commercial", "industrial"
-- Return ONLY the JSON object, no markdown, no explanation`;
+- bill_month must be "YYYY-MM-01" format for the billing month
+- units must be a number (kWh consumed this billing cycle)
+- bill_amount must be a number (total rupees for this billing cycle)
+- If consumer2 is not present on this bill, set consumer2.units = null and consumer2.bill_amount = null
+- Return ONLY the JSON object, no markdown`;
 
-async function extractBillData(fileBuffer: Buffer, mimeType: string): Promise<BillExtractionRaw> {
-  const base64Data = fileBuffer.toString("base64");
+// ─── AI Calls ────────────────────────────────────────────────────────────────
 
+async function extractMeta(buffer: Buffer, mimeType: string): Promise<ConsumerMeta> {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { inlineData: { mimeType, data: base64Data } },
-          { text: EXTRACTION_PROMPT },
-        ],
-      },
-    ],
-    config: {
-      responseMimeType: "application/json",
-      maxOutputTokens: 8192,
-    },
+    contents: [{
+      role: "user",
+      parts: [
+        { inlineData: { mimeType, data: buffer.toString("base64") } },
+        { text: META_PROMPT },
+      ],
+    }],
+    config: { responseMimeType: "application/json", maxOutputTokens: 8192 },
   });
-
-  const rawText = response.text ?? "{}";
-  const cleaned = rawText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  const parsed = JSON.parse(cleaned) as BillExtractionRaw;
-
-  const safeConsumer = (c: ConsumerRaw | null | undefined): ConsumerRaw => ({
-    name: c?.name ?? null,
-    consumer_number: c?.consumer_number ?? null,
-    sanctioned_load_kw: typeof c?.sanctioned_load_kw === "number" ? c.sanctioned_load_kw : null,
-    connection_type: c?.connection_type ?? null,
-    current_month_units: typeof c?.current_month_units === "number" ? c.current_month_units : null,
-    current_month_bill: typeof c?.current_month_bill === "number" ? c.current_month_bill : null,
-    current_month_date: c?.current_month_date ?? null,
-  });
-
+  const raw = (response.text ?? "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  const parsed = JSON.parse(raw) as ConsumerMeta;
   return {
-    consumer1: safeConsumer(parsed.consumer1),
-    consumer2: safeConsumer(parsed.consumer2),
+    consumer1_name: parsed.consumer1_name ?? null,
+    consumer1_number: parsed.consumer1_number ?? null,
+    consumer1_load: typeof parsed.consumer1_load === "number" ? parsed.consumer1_load : null,
+    consumer1_connection: parsed.consumer1_connection ?? null,
+    consumer2_name: parsed.consumer2_name ?? null,
+    consumer2_number: parsed.consumer2_number ?? null,
+    consumer2_load: typeof parsed.consumer2_load === "number" ? parsed.consumer2_load : null,
+    consumer2_connection: parsed.consumer2_connection ?? null,
   };
 }
 
-/**
- * Generate Excel matching Energybase's template exactly.
- *
- * Layout (1-indexed rows, A=col 1):
- *  Row 2:  Consumer Name    |   | [Name1]         |  |  |  | [Name2]
- *  Row 3:  Consumer No      |   | [Number1]       |  |  |  | [Number2]
- *  Row 4:  Fixed Charges    |   | 130             |  |  |  | 130
- *  Row 5:  Sanct. Load (kW) |   | [Load1]         |  |  |  | [Load2]
- *  Row 6:  Connection Type  |   | [Type1]         |  |  |  | [Type2]
- *  Row 7:  Solar Panel used | 600
- *  Row 8:  Sr.No | Month | Units | Bill Amount | Unit Cost | Month | Units | Bill Amount | Unit Cost
- *  Rows 9-21: Monthly data — fill current month in row 9
- *             Col A: Sr.No, Col B: Month1, Col C: Units1, Col D: BillAmt1, Col E: (formula/blank)
- *             Col F: Month2, Col G: Units2, Col H: BillAmt2, Col I: (formula/blank)
- *  Row 22: Average row — formulas set here
- *  Row 23: =(D22*12*1.1)/1400
- *  Row 24: =D23/$C$7*1000
- *  Row 25: =ROUND(D24,0)*$C$7/1000
- *  Row 26: =D25/$C$7*1000
- *  Row 28: =SUM(C25:C25)
- *  Row 29: =SUM(C26:C26)
- */
-function generateExcel(extraction: BillExtractionRaw): Buffer {
+async function extractMonthly(buffer: Buffer, mimeType: string): Promise<MonthlyRaw | null> {
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: [{
+      role: "user",
+      parts: [
+        { inlineData: { mimeType, data: buffer.toString("base64") } },
+        { text: MONTHLY_PROMPT },
+      ],
+    }],
+    config: { responseMimeType: "application/json", maxOutputTokens: 8192 },
+  });
+  const raw = (response.text ?? "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  const parsed = JSON.parse(raw) as MonthlyRaw;
+  if (!parsed.bill_month) return null;
+  return {
+    bill_month: parsed.bill_month,
+    consumer1: {
+      units: typeof parsed.consumer1?.units === "number" ? parsed.consumer1.units : null,
+      bill_amount: typeof parsed.consumer1?.bill_amount === "number" ? parsed.consumer1.bill_amount : null,
+    },
+    consumer2: {
+      units: typeof parsed.consumer2?.units === "number" ? parsed.consumer2.units : null,
+      bill_amount: typeof parsed.consumer2?.bill_amount === "number" ? parsed.consumer2.bill_amount : null,
+    },
+  };
+}
+
+// ─── Excel Generation ────────────────────────────────────────────────────────
+//
+// Layout (1-indexed rows, letters = columns):
+//   A  B        C      D           E            F   G        H      I           J
+//   -- -------- ------ ----------- ------------ --- -------- ------ ----------- -----------
+//   2  Con Name        [Name1]                          [Name2]
+//   3  Con No          [Num1]                           [Num2]
+//   4  Fixed Ch        130                              130
+//   5  Sanct.          [Load1]                          [Load2]
+//   6  Conn.           [Type1]                          [Type2]
+//   7  Solar W  600
+//   8  Sr.No   Month   Units       Bill Amt     Unit C  Month   Units  Bill Amt  Unit Cost
+//   9-20       [monthly data rows 1-12]
+//   21 Average  [blank] =AVG(C9:C20) =AVG(D9:D20)       [blank] =AVG(H9:H20) =AVG(I9:I20)
+//   22 kW               =(C21*12*1.1)/1400              =(H21*12*1.1)/1400
+//   23 Panels            =C22/$C$7*1000                  =H22/$C$7*1000
+//   24 Capacity          =ROUND(C23,0)*$C$7/1000         =ROUND(H23,0)*$C$7/1000
+//   25 No.Panels         =C24/$C$7*1000                  =H24/$C$7*1000
+//   27 Total cap         =SUM(C24,H24)
+//   28 Total panels      =SUM(C25,H25)
+
+function generateExcel(
+  meta: ConsumerMeta,
+  monthlyData: MonthlyEntry[],
+): Buffer {
   const wb = XLSX.utils.book_new();
+  const ws: XLSX.WorkSheet = {};
 
-  const c1 = extraction.consumer1;
-  const c2 = extraction.consumer2;
-
-  // Build the sheet as a 2D array (rows 1..29, 9 columns A..I)
-  // Index: aoa[rowIdx][colIdx], row 0 = Excel row 1
-  const ROWS = 30;
-  const COLS = 9;
-  const aoa: (string | number | null)[][] = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
-
-  const set = (row: number, col: number, val: string | number | null) => {
-    aoa[row - 1][col - 1] = val;
+  const s = (cell: string, v: string | number, f?: string) => {
+    if (f) {
+      ws[cell] = { t: typeof v === "number" ? "n" : "s", v, f };
+    } else {
+      ws[cell] = { t: typeof v === "number" ? "n" : "s", v };
+    }
   };
 
-  // Row 2: Consumer Name
-  set(2, 1, "Consumer Name");
-  set(2, 3, c1.name ?? "");
-  set(2, 7, c2.name ?? "");
+  // ── Consumer meta (rows 2-6) ───────────────────────────────────────────────
+  s("A2", "Consumer Name");   s("C2", meta.consumer1_name ?? "");   s("G2", meta.consumer2_name ?? "");
+  s("A3", "Consumer No");     s("C3", meta.consumer1_number ?? ""); s("G3", meta.consumer2_number ?? "");
+  s("A4", "Fixed Charges");   s("C4", 130);                         s("G4", 130);
+  s("A5", "Sanct. Load (kW)");s("C5", meta.consumer1_load ?? "");  s("G5", meta.consumer2_load ?? "");
+  s("A6", "Connection Type"); s("C6", meta.consumer1_connection ?? ""); s("G6", meta.consumer2_connection ?? "");
 
-  // Row 3: Consumer No
-  set(3, 1, "Consumer No");
-  set(3, 3, c1.consumer_number ?? "");
-  set(3, 7, c2.consumer_number ?? "");
+  // ── Solar panel wattage (row 7) ────────────────────────────────────────────
+  s("A7", "Solar Panel used"); s("B7", 600);
 
-  // Row 4: Fixed Charges
-  set(4, 1, "Fixed Charges");
-  set(4, 3, 130);
-  set(4, 7, 130);
+  // ── Column headers (row 8) ────────────────────────────────────────────────
+  s("A8", "Sr.No");
+  s("B8", "Month"); s("C8", "Units"); s("D8", "Bill Amount"); s("E8", "Unit Cost");
+  s("G8", "Month"); s("H8", "Units"); s("I8", "Bill Amount"); s("J8", "Unit Cost");
 
-  // Row 5: Sanctioned Load
-  set(5, 1, "Sanct. Load (kW)");
-  set(5, 3, c1.sanctioned_load_kw ?? "");
-  set(5, 7, c2.sanctioned_load_kw ?? "");
+  // ── Monthly data rows (9-20, 12 rows) ─────────────────────────────────────
+  for (let i = 0; i < 12; i++) {
+    const row = 9 + i;
+    s(`A${row}`, i + 1); // Sr.No
+    if (i < monthlyData.length) {
+      const entry = monthlyData[i];
+      // Format month as display string e.g. "Feb 2025"
+      let monthLabel = entry.month;
+      try {
+        const d = new Date(entry.month);
+        if (!isNaN(d.getTime())) {
+          monthLabel = d.toLocaleString("en-IN", { month: "short", year: "numeric" });
+        }
+      } catch { /* keep raw */ }
 
-  // Row 6: Connection Type
-  set(6, 1, "Connection Type");
-  set(6, 3, c1.connection_type ?? "");
-  set(6, 7, c2.connection_type ?? "");
+      s(`B${row}`, monthLabel);
+      if (entry.consumer1Units !== null) s(`C${row}`, entry.consumer1Units);
+      if (entry.consumer1Bill !== null)  s(`D${row}`, entry.consumer1Bill);
 
-  // Row 7: Solar Panel wattage
-  set(7, 1, "Solar Panel used");
-  set(7, 2, 600);
-
-  // Row 8: Column headers
-  set(8, 1, "Sr.No");
-  set(8, 2, "Month");
-  set(8, 3, "Units");
-  set(8, 4, "Bill Amount");
-  set(8, 5, "Unit Cost");
-  set(8, 6, "Month");
-  set(8, 7, "Units");
-  set(8, 8, "Bill Amount");
-  set(8, 9, "Unit Cost");
-
-  // Rows 9-21: Monthly data (13 rows for 13 months of history)
-  // Fill current month's data in row 9 (most recent month)
-  for (let r = 9; r <= 21; r++) {
-    set(r, 1, r - 8); // Sr.No
+      s(`G${row}`, monthLabel);
+      if (entry.consumer2Units !== null) s(`H${row}`, entry.consumer2Units);
+      if (entry.consumer2Bill !== null)  s(`I${row}`, entry.consumer2Bill);
+    }
   }
 
-  // Consumer 1 current month data → row 9
-  if (c1.current_month_date) set(9, 2, c1.current_month_date);
-  if (c1.current_month_units !== null) set(9, 3, c1.current_month_units);
-  if (c1.current_month_bill !== null) set(9, 4, c1.current_month_bill);
+  // ── Row 21: Averages ───────────────────────────────────────────────────────
+  s("A21", "Average");
+  ws["C21"] = { t: "n", f: "AVERAGE(C9:C20)" };
+  ws["D21"] = { t: "n", f: "AVERAGE(D9:D20)" };
+  ws["H21"] = { t: "n", f: "AVERAGE(H9:H20)" };
+  ws["I21"] = { t: "n", f: "AVERAGE(I9:I20)" };
 
-  // Consumer 2 current month data → row 9
-  if (c2.current_month_date) set(9, 6, c2.current_month_date);
-  if (c2.current_month_units !== null) set(9, 7, c2.current_month_units);
-  if (c2.current_month_bill !== null) set(9, 8, c2.current_month_bill);
+  // ── Row 22: kW (annual generation estimate) ────────────────────────────────
+  s("A22", "kW");
+  ws["C22"] = { t: "n", f: "(C21*12*1.1)/1400" };
+  ws["H22"] = { t: "n", f: "(H21*12*1.1)/1400" };
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // ── Row 23: Solar Panels ───────────────────────────────────────────────────
+  s("A23", "Solar Panels");
+  ws["C23"] = { t: "n", f: "C22/$C$7*1000" };
+  ws["H23"] = { t: "n", f: "H22/$C$7*1000" };
 
-  // Row 22: Average formulas
-  ws["D22"] = { t: "n", f: "AVERAGE(D9:D21)" };
-  ws["I22"] = { t: "n", f: "AVERAGE(I9:I21)" };
-  ws["A22"] = { t: "s", v: "Average" };
+  // ── Row 24: Solar Capacity ─────────────────────────────────────────────────
+  s("A24", "Solar Capacity (kW)");
+  ws["C24"] = { t: "n", f: "ROUND(C23,0)*$C$7/1000" };
+  ws["H24"] = { t: "n", f: "ROUND(H23,0)*$C$7/1000" };
 
-  // Rows 23-29: Calculation formulas
-  ws["D23"] = { t: "n", f: "(D22*12*1.1)/1400" };
-  ws["D24"] = { t: "n", f: "D23/$C$7*1000" };
-  ws["D25"] = { t: "n", f: "ROUND(D24,0)*$C$7/1000" };
-  ws["D26"] = { t: "n", f: "D25/$C$7*1000" };
-  ws["D28"] = { t: "n", f: "SUM(C25:C25)" };
-  ws["D29"] = { t: "n", f: "SUM(C26:C26)" };
+  // ── Row 25: Number of Panels ───────────────────────────────────────────────
+  s("A25", "Number of Panels");
+  ws["C25"] = { t: "n", f: "C24/$C$7*1000" };
+  ws["H25"] = { t: "n", f: "H24/$C$7*1000" };
 
-  // Row labels for formula rows
-  ws["A23"] = { t: "s", v: "Annual Generation (kWh)" };
-  ws["A24"] = { t: "s", v: "No. of Panels" };
-  ws["A25"] = { t: "s", v: "System Size (kW)" };
-  ws["A26"] = { t: "s", v: "Actual Generation (kWh)" };
-  ws["A28"] = { t: "s", v: "Total Panels" };
-  ws["A29"] = { t: "s", v: "Total System Size (kW)" };
+  // ── Row 27-28: Totals ──────────────────────────────────────────────────────
+  s("A27", "Total Solar Capacity");
+  ws["C27"] = { t: "n", f: "SUM(C24,H24)" };
 
-  // Column widths
+  s("A28", "Number of Solar Panels");
+  ws["C28"] = { t: "n", f: "SUM(C25,H25)" };
+
+  // ── Column widths ──────────────────────────────────────────────────────────
   ws["!cols"] = [
     { wch: 22 }, // A
     { wch: 12 }, // B
-    { wch: 12 }, // C
+    { wch: 10 }, // C
     { wch: 14 }, // D
-    { wch: 12 }, // E
-    { wch: 12 }, // F
+    { wch: 11 }, // E
+    { wch: 3  }, // F (separator)
     { wch: 12 }, // G
-    { wch: 14 }, // H
-    { wch: 12 }, // I
+    { wch: 10 }, // H
+    { wch: 14 }, // I
+    { wch: 11 }, // J
   ];
 
-  // Set the sheet range
-  ws["!ref"] = "A1:I30";
+  ws["!ref"] = "A1:J30";
 
   XLSX.utils.book_append_sheet(wb, ws, "Solar Report");
-
-  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-  return buffer as Buffer;
+  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }
+
+// ─── Route ───────────────────────────────────────────────────────────────────
 
 router.post(
   "/bills/process",
-  upload.single("file"),
+  upload.array("files", 12),
   async (req, res) => {
     try {
-      if (!req.file) {
-        res.status(400).json({ error: "Please upload a bill first" });
+      const files = req.files as Express.Multer.File[] | undefined;
+
+      if (!files || files.length === 0) {
+        res.status(400).json({ error: "Please upload at least one bill file" });
         return;
       }
 
-      const { buffer, mimetype } = req.file;
-
-      let extraction: BillExtractionRaw;
+      // Step 1: Extract consumer metadata from the first file
+      let meta: ConsumerMeta;
       try {
-        extraction = await extractBillData(buffer, mimetype);
+        meta = await extractMeta(files[0].buffer, files[0].mimetype);
       } catch (err) {
-        req.log.error({ err }, "Gemini extraction failed");
-        res.status(500).json({ error: "AI extraction failed. Please try a clearer bill image." });
+        req.log.error({ err }, "Meta extraction failed");
+        res.status(500).json({ error: "AI could not read the bill. Please try a clearer image." });
         return;
       }
 
-      const c1 = extraction.consumer1;
-      if (!c1.name && !c1.consumer_number && c1.current_month_units === null) {
-        res.status(422).json({ error: "Could not extract consumer data from the bill. Try uploading a clearer image." });
+      // Step 2: Extract monthly data from every file sequentially
+      const rawMonthly: MonthlyEntry[] = [];
+      let failCount = 0;
+
+      for (const file of files) {
+        try {
+          const monthly = await extractMonthly(file.buffer, file.mimetype);
+          if (monthly?.bill_month) {
+            rawMonthly.push({
+              month: monthly.bill_month,
+              consumer1Units: monthly.consumer1.units,
+              consumer1Bill: monthly.consumer1.bill_amount,
+              consumer2Units: monthly.consumer2.units,
+              consumer2Bill: monthly.consumer2.bill_amount,
+            });
+          }
+        } catch {
+          failCount++;
+        }
+      }
+
+      if (rawMonthly.length === 0) {
+        res.status(422).json({ error: "Could not extract any monthly data. Try clearer bill images." });
         return;
       }
 
+      // Step 3: Deduplicate by month and sort oldest → newest
+      const byMonth = new Map<string, MonthlyEntry>();
+      for (const entry of rawMonthly) {
+        if (!byMonth.has(entry.month)) {
+          byMonth.set(entry.month, entry);
+        }
+      }
+      const monthlyData = Array.from(byMonth.values()).sort(
+        (a, b) => new Date(a.month).getTime() - new Date(b.month).getTime(),
+      );
+
+      // Step 4: Generate Excel
       let excelBuffer: Buffer;
       try {
-        excelBuffer = generateExcel(extraction);
+        excelBuffer = generateExcel(meta, monthlyData);
       } catch (err) {
         req.log.error({ err }, "Excel generation failed");
         res.status(500).json({ error: "Failed to generate Excel report." });
         return;
       }
 
-      // Derive filename from bill month
-      const rawDate = c1.current_month_date ?? "";
-      let monthLabel = "Unknown";
-      if (rawDate) {
-        const d = new Date(rawDate);
-        if (!isNaN(d.getTime())) {
-          monthLabel = d.toLocaleString("en-IN", { month: "long", year: "numeric" });
-        }
+      // Derive filename from latest month
+      const latestMonth = monthlyData[monthlyData.length - 1]?.month ?? "";
+      let monthLabel = "Report";
+      if (latestMonth) {
+        try {
+          const d = new Date(latestMonth);
+          if (!isNaN(d.getTime())) {
+            monthLabel = d.toLocaleString("en-IN", { month: "long", year: "numeric" });
+          }
+        } catch { /* keep default */ }
       }
-      const safeMonth = monthLabel.replace(/[^a-zA-Z0-9_-]/g, "_");
-      const filename = `Solar_Report_${safeMonth}.xlsx`;
-      const excelBase64 = excelBuffer.toString("base64");
+      const filename = `Solar_Report_${monthLabel.replace(/\s+/g, "_")}.xlsx`;
 
       res.json({
-        consumer1: {
-          name: c1.name,
-          consumerNumber: c1.consumer_number,
-          sanctionedLoadKw: c1.sanctioned_load_kw,
-          connectionType: c1.connection_type,
-          currentMonthUnits: c1.current_month_units,
-          currentMonthBill: c1.current_month_bill,
-          currentMonthDate: c1.current_month_date,
-        },
-        consumer2: {
-          name: extraction.consumer2.name,
-          consumerNumber: extraction.consumer2.consumer_number,
-          sanctionedLoadKw: extraction.consumer2.sanctioned_load_kw,
-          connectionType: extraction.consumer2.connection_type,
-          currentMonthUnits: extraction.consumer2.current_month_units,
-          currentMonthBill: extraction.consumer2.current_month_bill,
-          currentMonthDate: extraction.consumer2.current_month_date,
-        },
-        excelBase64,
+        consumer1Name: meta.consumer1_name,
+        consumer1Number: meta.consumer1_number,
+        consumer1Load: meta.consumer1_load,
+        consumer1Connection: meta.consumer1_connection,
+        consumer2Name: meta.consumer2_name,
+        consumer2Number: meta.consumer2_number,
+        consumer2Load: meta.consumer2_load,
+        consumer2Connection: meta.consumer2_connection,
+        monthlyData,
+        totalFilesProcessed: files.length - failCount,
+        excelBase64: excelBuffer.toString("base64"),
         excelFilename: filename,
       });
     } catch (err) {
-      req.log.error({ err }, "Unexpected error processing bill");
+      req.log.error({ err }, "Unexpected error processing bills");
       res.status(500).json({ error: "An unexpected error occurred. Please try again." });
     }
   },

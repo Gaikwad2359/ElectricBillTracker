@@ -9,26 +9,38 @@ export interface HealthStatus {
   status: string;
 }
 
-export interface ConsumerData {
+export interface MonthlyEntry {
+  /** ISO date string, e.g. 2026-01-01 */
+  month: string;
   /** @nullable */
-  name: string | null;
+  consumer1Units: number | null;
   /** @nullable */
-  consumerNumber: string | null;
+  consumer1Bill: number | null;
   /** @nullable */
-  sanctionedLoadKw: number | null;
+  consumer2Units: number | null;
   /** @nullable */
-  connectionType: string | null;
-  /** @nullable */
-  currentMonthUnits: number | null;
-  /** @nullable */
-  currentMonthBill: number | null;
-  /** @nullable */
-  currentMonthDate: string | null;
+  consumer2Bill: number | null;
 }
 
 export interface BillProcessResult {
-  consumer1: ConsumerData;
-  consumer2: ConsumerData;
+  /** @nullable */
+  consumer1Name: string | null;
+  /** @nullable */
+  consumer1Number: string | null;
+  /** @nullable */
+  consumer1Load: number | null;
+  /** @nullable */
+  consumer1Connection: string | null;
+  /** @nullable */
+  consumer2Name: string | null;
+  /** @nullable */
+  consumer2Number: string | null;
+  /** @nullable */
+  consumer2Load: number | null;
+  /** @nullable */
+  consumer2Connection: string | null;
+  monthlyData: MonthlyEntry[];
+  totalFilesProcessed: number;
   excelBase64: string;
   excelFilename: string;
 }
@@ -37,6 +49,6 @@ export interface ApiError {
   error: string;
 }
 
-export type ProcessBillBody = {
-  file: Blob;
+export type ProcessBillsBody = {
+  files: Blob[];
 };
