@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: bills
+    description: Electricity bill processing operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /bills/process:
+    post:
+      operationId: processBill
+      tags: [bills]
+      summary: Process electricity bill (PDF or image)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+                - file
+      responses:
+        "200":
+          description: Extracted bill data and Excel report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillProcessResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +71,41 @@ components:
           type: string
       required:
         - status
-
+    BillProcessResult:
+      type: object
+      properties:
+        unitsConsumed:
+          type: ["number", "null"]
+        connectedLoad:
+          type: ["number", "null"]
+        tariffType:
+          type: ["string", "null"]
+        billMonth:
+          type: ["string", "null"]
+        recommendedSolarKw:
+          type: ["number", "null"]
+        estimatedMonthlySavings:
+          type: ["number", "null"]
+        paybackPeriodYears:
+          type: ["number", "null"]
+        excelBase64:
+          type: string
+        excelFilename:
+          type: string
+      required:
+        - unitsConsumed
+        - connectedLoad
+        - tariffType
+        - billMonth
+        - recommendedSolarKw
+        - estimatedMonthlySavings
+        - paybackPeriodYears
+        - excelBase64
+        - excelFilename
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error

@@ -5,18 +5,26 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  ApiError,
+  BillProcessResult,
+  HealthStatus,
+  ProcessBillBody,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -99,3 +107,91 @@ export function useHealthCheck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Process electricity bill (PDF or image)
+ */
+export const getProcessBillUrl = () => {
+  return `/api/bills/process`;
+};
+
+export const processBill = async (
+  processBillBody: ProcessBillBody,
+  options?: RequestInit,
+): Promise<BillProcessResult> => {
+  const formData = new FormData();
+  formData.append(`file`, processBillBody.file);
+
+  return customFetch<BillProcessResult>(getProcessBillUrl(), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getProcessBillMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof processBill>>,
+    TError,
+    { data: BodyType<ProcessBillBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof processBill>>,
+  TError,
+  { data: BodyType<ProcessBillBody> },
+  TContext
+> => {
+  const mutationKey = ["processBill"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof processBill>>,
+    { data: BodyType<ProcessBillBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return processBill(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ProcessBillMutationResult = NonNullable<
+  Awaited<ReturnType<typeof processBill>>
+>;
+export type ProcessBillMutationBody = BodyType<ProcessBillBody>;
+export type ProcessBillMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Process electricity bill (PDF or image)
+ */
+export const useProcessBill = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof processBill>>,
+    TError,
+    { data: BodyType<ProcessBillBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof processBill>>,
+  TError,
+  { data: BodyType<ProcessBillBody> },
+  TContext
+> => {
+  return useMutation(getProcessBillMutationOptions(options));
+};

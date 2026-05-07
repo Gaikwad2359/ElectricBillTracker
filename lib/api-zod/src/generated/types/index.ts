@@ -6,4 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./apiError";
+export * from "./billProcessResult";
 export * from "./healthStatus";
+export * from "./processBillBody";

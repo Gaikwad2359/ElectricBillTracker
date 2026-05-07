@@ -1,0 +1,157 @@
+Create a complete Streamlit web application for electricity bill to Excel automation.
+
+## WHAT THIS APP DOES:
+User uploads electricity bill (PDF or image) → AI extracts key data → Downloads filled Excel file with solar calculations.
+
+## EXACT REQUIREMENTS:
+
+### 1. VISUAL DESIGN (Must be beautiful, modern, responsive)
+- Primary color: #10B981 (emerald green)
+- Secondary: #F59E0B (amber)
+- Background: #F9FAFB
+- White cards with border-radius: 16px and subtle shadow
+- All buttons must have hover effects (scale 1.02)
+- Use gradient headers
+- Mobile responsive (works on phones, tablets, desktops)
+
+### 2. PAGE LAYOUT (In this exact order)
+**Header:** 
+- Title: "☀️ Energybase Solar Calculator"
+- Tagline: "Upload your electricity bill → Get solar recommendation in 30 seconds"
+- Badge: "AI-Powered | Instant | Free"
+
+**Upload Card:**
+- File uploader accepting PDF, PNG, JPG, JPEG
+- Max file: 10MB
+- Show preview of uploaded image (if image)
+- Show file name
+
+**Process Button:**
+- Large button: "🚀 Process Bill"
+- Must show loading state with spinner
+- Loading text: "🤖 AI is reading your bill..."
+
+**Results Card (appears only after processing):**
+- Green success message: "✅ Extraction Complete!"
+- Show 4 metric cards in a 2x2 grid:
+  * Units Consumed (kWh)
+  * Connected Load (kW)
+  * Tariff Type
+  * Bill Month
+- Download button: "📥 Download Excel Report" (amber color, large)
+
+**How It Works Section:**
+- 3 columns with icons: 📄 Upload Bill → 🤖 AI Reads → 📊 Get Excel
+
+**Footer:**
+- "Made with ❤️ for Energybase | AI Intern Task"
+
+### 3. FUNCTIONALITY (Must work perfectly)
+
+**File Processing:**
+- PDF files: extract text using pdfplumber
+- Images: OCR using pytesseract (extract text)
+- Send extracted text to Gemini AI
+
+**AI Extraction (Google Gemini):**
+- Use Gemini 1.5 Flash model (free)
+- Extract exactly these 4 fields:
+  * units_consumed (number)
+  * connected_load (number in kW)
+  * tariff_type ("residential", "commercial", or "industrial")
+  * bill_month (string like "January 2026")
+- Return as JSON
+- Prompt must be optimized for Indian MSEDCL bills
+
+**Excel Generation:**
+- If "Solar_Load_Excel_Template.xlsx" doesn't exist, create it with:
+  * Row 1: "Average Monthly Units (kWh)" | [empty] | =B2*7
+  * Row 2: "Connected Load (kW)" | [empty] | 
+  * Row 3: "Tariff Type" | [empty] | 
+  * Row 4: "Bill Month" | [empty] | 
+  * Row 5: "Recommended Solar System (kW)" | [empty] | =ROUNDUP(B2/120,1)
+  * Row 6: "Estimated Monthly Savings (₹)" | [empty] | =B2*7
+  * Row 7: "Payback Period (years)" | [empty] | =ROUND(50000/B6,1)
+- Fill the empty cells (column B) with extracted data
+- Save as: "Solar_Report_[bill_month].xlsx"
+- Provide download button
+
+### 4. ERROR HANDLING
+- No file uploaded → show "Please upload a bill first"
+- API key missing → show "Add GEMINI_API_KEY to secrets"
+- Extraction failed → show friendly error
+- File too large → show "File must be <10MB"
+- Empty extraction → show "Try clearer bill image"
+
+### 5. TECHNICAL REQUIREMENTS
+- Use Streamlit with st.set_page_config(layout="wide")
+- Use session_state to manage processing state
+- Add custom CSS for styling
+- Use environment variable: GEMINI_API_KEY
+- All extraction functions must be async or have timeout (30 seconds)
+- Show progress bar or spinner during processing
+
+### 6. CUSTOM CSS (Include exactly this)
+```css
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+* {font-family: 'Inter', sans-serif;}
+.main-header {
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 2.5rem;
+    font-weight: 700;
+    text-align: center;
+}
+.subtitle {
+    text-align: center;
+    color: #6B7280;
+    margin-bottom: 2rem;
+}
+.custom-card {
+    background: white;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
+    border: 1px solid #E5E7EB;
+}
+.metric-card {
+    background: linear-gradient(135deg, #F9FAFB 0%, #FFFFFF 100%);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    text-align: center;
+    border-left: 4px solid #10B981;
+}
+.metric-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #10B981;
+}
+.metric-label {
+    font-size: 0.875rem;
+    color: #6B7280;
+    margin-top: 0.25rem;
+}
+.stButton > button {
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    border-radius: 2rem;
+    transition: all 0.2s;
+    width: 100%;
+}
+.stButton > button:hover {
+    transform: scale(1.02);
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+.download-btn {
+    background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+}
+@media (max-width: 768px) {
+    .metric-value {font-size: 1.25rem;}
+    .custom-card {padding: 1rem;}
+}
+</style>

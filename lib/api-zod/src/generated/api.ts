@@ -14,3 +14,22 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * @summary Process electricity bill (PDF or image)
+ */
+export const ProcessBillBody = zod.object({
+  file: zod.instanceof(File),
+});
+
+export const ProcessBillResponse = zod.object({
+  unitsConsumed: zod.number().nullable(),
+  connectedLoad: zod.number().nullable(),
+  tariffType: zod.string().nullable(),
+  billMonth: zod.string().nullable(),
+  recommendedSolarKw: zod.number().nullable(),
+  estimatedMonthlySavings: zod.number().nullable(),
+  paybackPeriodYears: zod.number().nullable(),
+  excelBase64: zod.string(),
+  excelFilename: zod.string(),
+});

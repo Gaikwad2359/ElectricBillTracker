@@ -1,2 +1,6 @@
 export * from "./generated/api";
-export * from "./generated/types";
+export type {
+  ApiError,
+  BillProcessResult,
+  HealthStatus,
+} from "./generated/types";

@@ -8,3 +8,30 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface BillProcessResult {
+  /** @nullable */
+  unitsConsumed: number | null;
+  /** @nullable */
+  connectedLoad: number | null;
+  /** @nullable */
+  tariffType: string | null;
+  /** @nullable */
+  billMonth: string | null;
+  /** @nullable */
+  recommendedSolarKw: number | null;
+  /** @nullable */
+  estimatedMonthlySavings: number | null;
+  /** @nullable */
+  paybackPeriodYears: number | null;
+  excelBase64: string;
+  excelFilename: string;
+}
+
+export interface ApiError {
+  error: string;
+}
+
+export type ProcessBillBody = {
+  file: Blob;
+};
