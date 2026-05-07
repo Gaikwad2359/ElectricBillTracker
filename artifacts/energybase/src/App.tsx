@@ -9,7 +9,23 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { UploadCloud, File as FileIcon, AlertCircle, CheckCircle2, Zap, IndianRupee, Sun, Download, FileText, Bot } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { BillProcessResult } from "@workspace/api-client-react/src/generated/api.schemas";
+
+interface ConsumerData {
+  name: string | null;
+  consumerNumber: string | null;
+  sanctionedLoadKw: number | null;
+  connectionType: string | null;
+  currentMonthUnits: number | null;
+  currentMonthBill: number | null;
+  currentMonthDate: string | null;
+}
+
+interface BillProcessResult {
+  consumer1: ConsumerData;
+  consumer2: ConsumerData;
+  excelBase64: string;
+  excelFilename: string;
+}
 
 const queryClient = new QueryClient();
 
@@ -285,59 +301,96 @@ function Home() {
                   Extraction Complete!
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Extracted Metrics */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <Card className="border-0 shadow-sm" data-testid="card-metric-units">
-                      <CardContent className="p-5 flex flex-col items-center justify-center text-center h-full">
-                        <p className="text-sm font-medium text-gray-500 mb-1">Units Consumed</p>
-                        <p className="text-2xl font-bold text-gray-900">{result.unitsConsumed ?? "--"} <span className="text-sm font-normal text-gray-500">kWh</span></p>
-                      </CardContent>
-                    </Card>
-                    <Card className="border-0 shadow-sm" data-testid="card-metric-load">
-                      <CardContent className="p-5 flex flex-col items-center justify-center text-center h-full">
-                        <p className="text-sm font-medium text-gray-500 mb-1">Connected Load</p>
-                        <p className="text-2xl font-bold text-gray-900">{result.connectedLoad ?? "--"} <span className="text-sm font-normal text-gray-500">kW</span></p>
-                      </CardContent>
-                    </Card>
-                    <Card className="border-0 shadow-sm" data-testid="card-metric-tariff">
-                      <CardContent className="p-5 flex flex-col items-center justify-center text-center h-full">
-                        <p className="text-sm font-medium text-gray-500 mb-1">Tariff Type</p>
-                        <p className="text-lg font-bold text-gray-900">{result.tariffType || "--"}</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="border-0 shadow-sm" data-testid="card-metric-month">
-                      <CardContent className="p-5 flex flex-col items-center justify-center text-center h-full">
-                        <p className="text-sm font-medium text-gray-500 mb-1">Bill Month</p>
-                        <p className="text-lg font-bold text-gray-900">{result.billMonth || "--"}</p>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Computed Metrics */}
-                  <Card className="border border-emerald-100 shadow-md bg-gradient-to-br from-emerald-50 to-white" data-testid="card-recommendations">
-                    <CardContent className="p-6 space-y-6">
-                      <h3 className="text-lg font-semibold text-emerald-900 flex items-center">
-                        <Zap className="w-5 h-5 mr-2 text-emerald-600" />
-                        AI Recommendation
-                      </h3>
-                      
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-center border-b border-emerald-100 pb-3" data-testid="rec-solar">
-                          <span className="text-gray-600">Recommended Solar</span>
-                          <span className="text-xl font-bold text-emerald-700">{result.recommendedSolarKw ?? "--"} kW</span>
-                        </div>
-                        <div className="flex justify-between items-center border-b border-emerald-100 pb-3" data-testid="rec-savings">
-                          <span className="text-gray-600">Monthly Savings</span>
-                          <span className="text-xl font-bold text-emerald-700">₹{result.estimatedMonthlySavings?.toLocaleString() ?? "--"}</span>
-                        </div>
-                        <div className="flex justify-between items-center" data-testid="rec-payback">
-                          <span className="text-gray-600">Payback Period</span>
-                          <span className="text-xl font-bold text-emerald-700">{result.paybackPeriodYears ?? "--"} years</span>
-                        </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Consumer 1 */}
+                  <Card className="border-0 shadow-md bg-white overflow-hidden" data-testid="card-consumer-1">
+                    <div className="bg-emerald-600 text-white px-6 py-3 font-semibold text-lg flex items-center">
+                      <Zap className="w-5 h-5 mr-2" />
+                      Consumer 1
+                    </div>
+                    <CardContent className="p-6 space-y-3">
+                      <div className="flex justify-between border-b border-gray-100 pb-2">
+                        <span className="text-gray-500">Name</span>
+                        <span className="font-medium text-gray-900 text-right">{result.consumer1?.name || "--"}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-gray-100 pb-2">
+                        <span className="text-gray-500">Consumer No</span>
+                        <span className="font-medium text-gray-900 text-right">{result.consumer1?.consumerNumber || "--"}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-gray-100 pb-2">
+                        <span className="text-gray-500">Units This Month</span>
+                        <span className="font-medium text-gray-900 text-right">{result.consumer1?.currentMonthUnits != null ? `${result.consumer1.currentMonthUnits} kWh` : "--"}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-gray-100 pb-2">
+                        <span className="text-gray-500">Bill Amount</span>
+                        <span className="font-medium text-gray-900 text-right">{result.consumer1?.currentMonthBill != null ? `Rs ${result.consumer1.currentMonthBill}` : "--"}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-gray-100 pb-2">
+                        <span className="text-gray-500">Sanctioned Load</span>
+                        <span className="font-medium text-gray-900 text-right">{result.consumer1?.sanctionedLoadKw != null ? `${result.consumer1.sanctionedLoadKw} kW` : "--"}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-gray-100 pb-2">
+                        <span className="text-gray-500">Connection Type</span>
+                        <span className="font-medium text-gray-900 text-right">{result.consumer1?.connectionType || "--"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Bill Month</span>
+                        <span className="font-medium text-gray-900 text-right">
+                          {result.consumer1?.currentMonthDate 
+                            ? isNaN(Date.parse(result.consumer1.currentMonthDate))
+                              ? result.consumer1.currentMonthDate 
+                              : new Date(result.consumer1.currentMonthDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                            : "--"}
+                        </span>
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* Consumer 2 */}
+                  {(result.consumer2?.name || result.consumer2?.currentMonthUnits != null) && (
+                    <Card className="border-0 shadow-md bg-white overflow-hidden" data-testid="card-consumer-2">
+                      <div className="bg-emerald-600 text-white px-6 py-3 font-semibold text-lg flex items-center">
+                        <Zap className="w-5 h-5 mr-2" />
+                        Consumer 2
+                      </div>
+                      <CardContent className="p-6 space-y-3">
+                        <div className="flex justify-between border-b border-gray-100 pb-2">
+                          <span className="text-gray-500">Name</span>
+                          <span className="font-medium text-gray-900 text-right">{result.consumer2?.name || "--"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 pb-2">
+                          <span className="text-gray-500">Consumer No</span>
+                          <span className="font-medium text-gray-900 text-right">{result.consumer2?.consumerNumber || "--"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 pb-2">
+                          <span className="text-gray-500">Units This Month</span>
+                          <span className="font-medium text-gray-900 text-right">{result.consumer2?.currentMonthUnits != null ? `${result.consumer2.currentMonthUnits} kWh` : "--"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 pb-2">
+                          <span className="text-gray-500">Bill Amount</span>
+                          <span className="font-medium text-gray-900 text-right">{result.consumer2?.currentMonthBill != null ? `Rs ${result.consumer2.currentMonthBill}` : "--"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 pb-2">
+                          <span className="text-gray-500">Sanctioned Load</span>
+                          <span className="font-medium text-gray-900 text-right">{result.consumer2?.sanctionedLoadKw != null ? `${result.consumer2.sanctionedLoadKw} kW` : "--"}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-gray-100 pb-2">
+                          <span className="text-gray-500">Connection Type</span>
+                          <span className="font-medium text-gray-900 text-right">{result.consumer2?.connectionType || "--"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Bill Month</span>
+                          <span className="font-medium text-gray-900 text-right">
+                            {result.consumer2?.currentMonthDate 
+                              ? isNaN(Date.parse(result.consumer2.currentMonthDate))
+                                ? result.consumer2.currentMonthDate 
+                                : new Date(result.consumer2.currentMonthDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                              : "--"}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
 
                 <div className="flex justify-center pt-4">

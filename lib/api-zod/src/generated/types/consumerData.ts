@@ -5,9 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-export interface HealthStatus {
-  status: string;
-}
 
 export interface ConsumerData {
   /** @nullable */
@@ -25,18 +22,3 @@ export interface ConsumerData {
   /** @nullable */
   currentMonthDate: string | null;
 }
-
-export interface BillProcessResult {
-  consumer1: ConsumerData;
-  consumer2: ConsumerData;
-  excelBase64: string;
-  excelFilename: string;
-}
-
-export interface ApiError {
-  error: string;
-}
-
-export type ProcessBillBody = {
-  file: Blob;
-};

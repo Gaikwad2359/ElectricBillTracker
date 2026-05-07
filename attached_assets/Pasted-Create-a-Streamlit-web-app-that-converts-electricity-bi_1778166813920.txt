@@ -1,0 +1,67 @@
+Create a Streamlit web app that converts electricity bills to Excel in Energybase's specific format.
+
+## WHAT THE APP DOES:
+User uploads ONE bill (PDF or image) → AI extracts data → Downloads Excel file matching company's template exactly.
+
+## THE EXCEL FORMAT (Must match exactly):
+
+The Excel file must look like this:
+
+Row 2: "Consumer Name" | blank | [Name 1] | blank | blank | blank | [Name 2]
+Row 3: "Consumer No" | blank | [Number 1] | blank | blank | blank | [Number 2]  
+Row 4: "Fixed Charges" | blank | 130 | blank | blank | blank | 130
+Row 5: "Sanct. Load (kW)" | blank | [3.3KW] | blank | blank | blank | [1KW]
+Row 6: "Connection Type" | blank | [text] | blank | blank | blank | [text]
+Row 7: "Solar Pannel used" | 600 | blank | blank | blank | blank | blank
+Row 8: "Sr.No" | "Month" | "Units" | "Bill Amount" | "Unit Cost" | "Month" | "Units" | "Bill Amount" | "Unit Cost"
+Row 9-21: Monthly data (dates in column B and F, units in C and G)
+Row 22: "Average" | =AVERAGE(D9:D21) | etc (LET EXCEL CALCULATE - DON'T FILL)
+Row 23-29: Keep all existing formulas - DO NOT MODIFY
+
+## WHAT AI MUST EXTRACT FROM THE BILL:
+
+From one bill, extract for up to 2 consumers:
+
+For Consumer 1:
+- Name
+- Consumer number  
+- Sanctioned load (just the number, e.g., 3.3)
+- Connection type
+- Current month units (e.g., 25)
+- Current month bill amount (e.g., 320.45)
+- Current month date (e.g., 2026-01-01)
+
+For Consumer 2 (if on same bill):
+- Same fields as above
+
+## WEBSITE DESIGN (From your screenshots):
+
+Header:
+- "☀️ Energybase Solar Calculator ❤️"
+- "AI-Powered | Instant | Free" badge
+- "Upload your electricity bill to get a solar recommendation in 30 seconds."
+
+Upload box:
+- Dashed border, centered
+- "Click or drag and drop"
+- "PDF, PNG, JPG up to 10MB"
+
+Process button:
+- Green, "Process Bill"
+
+After processing:
+- Show extracted data
+- Download button: "Download Excel Report"
+
+Bottom section:
+- 3 columns: "1. Upload Bill" | "2. AI Reads Data" | "3. Get Excel"
+
+Colors:
+- Green: #10B981
+- Amber: #F59E0B  
+- Background: #F9FAFB
+- White cards with shadow
+
+## GEMINI API PROMPT (Use exactly this):
+
+Send this to Gemini API:

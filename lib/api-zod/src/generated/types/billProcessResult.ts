@@ -5,22 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ConsumerData } from "./consumerData";
 
 export interface BillProcessResult {
-  /** @nullable */
-  unitsConsumed: number | null;
-  /** @nullable */
-  connectedLoad: number | null;
-  /** @nullable */
-  tariffType: string | null;
-  /** @nullable */
-  billMonth: string | null;
-  /** @nullable */
-  recommendedSolarKw: number | null;
-  /** @nullable */
-  estimatedMonthlySavings: number | null;
-  /** @nullable */
-  paybackPeriodYears: number | null;
+  consumer1: ConsumerData;
+  consumer2: ConsumerData;
   excelBase64: string;
   excelFilename: string;
 }

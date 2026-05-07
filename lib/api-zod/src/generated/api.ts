@@ -23,13 +23,24 @@ export const ProcessBillBody = zod.object({
 });
 
 export const ProcessBillResponse = zod.object({
-  unitsConsumed: zod.number().nullable(),
-  connectedLoad: zod.number().nullable(),
-  tariffType: zod.string().nullable(),
-  billMonth: zod.string().nullable(),
-  recommendedSolarKw: zod.number().nullable(),
-  estimatedMonthlySavings: zod.number().nullable(),
-  paybackPeriodYears: zod.number().nullable(),
+  consumer1: zod.object({
+    name: zod.string().nullable(),
+    consumerNumber: zod.string().nullable(),
+    sanctionedLoadKw: zod.number().nullable(),
+    connectionType: zod.string().nullable(),
+    currentMonthUnits: zod.number().nullable(),
+    currentMonthBill: zod.number().nullable(),
+    currentMonthDate: zod.string().nullable(),
+  }),
+  consumer2: zod.object({
+    name: zod.string().nullable(),
+    consumerNumber: zod.string().nullable(),
+    sanctionedLoadKw: zod.number().nullable(),
+    connectionType: zod.string().nullable(),
+    currentMonthUnits: zod.number().nullable(),
+    currentMonthBill: zod.number().nullable(),
+    currentMonthDate: zod.string().nullable(),
+  }),
   excelBase64: zod.string(),
   excelFilename: zod.string(),
 });
